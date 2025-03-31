@@ -2,7 +2,7 @@ import axios, { HttpStatusCode } from 'axios'
 import { clearAuthToken, getAuthToken, setAuthToken } from './authService'
 
 const api = axios.create({
-  baseURL: import.meta.env.API_URL || 'http://127.0.0.1:8000',
+  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000',
   withCredentials: true,
 })
 
