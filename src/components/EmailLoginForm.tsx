@@ -4,7 +4,7 @@ import {
   CheckmarkCircle20Filled,
   ChevronDown20Filled,
 } from '@fluentui/react-icons'
-import axios, { HttpStatusCode } from 'axios'
+import { HttpStatusCode } from 'axios'
 import { Loader } from 'lucide-react'
 import { Select } from 'radix-ui'
 import { useState } from 'react'
@@ -12,7 +12,9 @@ import { useForm } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { useAuth } from '../contexts/AuthContext'
 import { cn, sleep } from '../lib/utils'
+import api from '../services/api'
 
 const loginFormSchema = z.object({
   email: z
@@ -36,10 +38,7 @@ const newUserFormSchema = z.object({
     .string()
     .nonempty()
     .min(2, { message: 'Username is too short.' })
-    .max(30, { message: 'Username is too long.' })
-    .regex(/^[a-zA-Z0-9_]+$/, {
-      message: 'Username can only contain letters, numbers, and underscores.',
-    }),
+    .max(30, { message: 'Username is too long.' }),
   gender: z.enum(['female', 'male', 'prefer_not_to_say'], {
     message: 'Select a gender.',
   }),
@@ -50,6 +49,7 @@ type NewUserFormSchema = z.infer<typeof newUserFormSchema>
 export default function EmailLoginForm() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { requestLogin, verifyLogin } = useAuth()
 
   const [loginToken, setLoginToken] = useState<string | null>(
     searchParams.get('token') ?? null,
@@ -69,17 +69,9 @@ export default function EmailLoginForm() {
       if (!loginToken) {
         loginFormSchema.parse(values)
 
-        const response = await axios.post('/api/auth/login/email', {
-          email: values.email,
-        })
+        const data = await requestLogin(values.email)
 
-        if (response.status !== HttpStatusCode.Ok) {
-          throw new Error('Failed to send verification email.')
-        }
-
-        const data = response.data
-
-        const loginToken: string = data.token
+        const loginToken: string = data.login_token
         const isNewUser: boolean = data.is_new_user
 
         setLoginToken(loginToken)
@@ -104,15 +96,7 @@ export default function EmailLoginForm() {
       if (loginToken && isNewUser === false) {
         verifyFormSchema.parse(values)
 
-        const response = await axios.post('/api/auth/verify/email', {
-          token: loginToken,
-          verification_code: values.verificationCode,
-          is_new_user: isNewUser,
-        })
-
-        if (response.status !== HttpStatusCode.Ok) {
-          throw new Error('Failed to verify code.')
-        }
+        await verifyLogin(loginToken, values.verificationCode, isNewUser)
 
         toast('You will be redirected to the home page soon.')
 
@@ -135,7 +119,7 @@ export default function EmailLoginForm() {
 
   async function checkUsernameAvailability(username: string) {
     try {
-      const response = await axios.post('/api/auth/attempt/username', {
+      const response = await api.post('/auth/attempt/username', {
         username: username,
       })
 
@@ -150,7 +134,7 @@ export default function EmailLoginForm() {
       if (!usernameAvailable) {
         newUserForm.setError('username', {
           type: 'manual',
-          message: 'Username already taken.',
+          message: `${data.error}.`,
         })
       } else {
         newUserForm.clearErrors('username')
@@ -166,18 +150,11 @@ export default function EmailLoginForm() {
         checkUsernameAvailability(values.username)
         newUserFormSchema.parse(values)
 
-        const response = await axios.post('/api/auth/verify/email', {
-          token: loginToken,
-          verification_code: values.verificationCode,
-          is_new_user: isNewUser,
+        await verifyLogin(loginToken, values.verificationCode, isNewUser, {
           name: values.name,
           username: values.username,
           gender: values.gender,
         })
-
-        if (response.status !== HttpStatusCode.Ok) {
-          throw new Error('Failed to verify code and create new user.')
-        }
 
         toast('You will be redirected to the home page soon.')
 
@@ -211,6 +188,7 @@ export default function EmailLoginForm() {
             autoComplete="email"
             autoCapitalize="none"
             placeholder="Email address"
+            autoFocus
             className="focus:border-barcelona-primary-outline bg-barcelona-tertiary-background w-full touch-manipulation rounded-[12px] border-[1px] border-transparent p-[16px] text-start leading-[140%] outline-none"
             {...loginForm.register('email', { required: true })}
           />
@@ -268,6 +246,7 @@ export default function EmailLoginForm() {
             autoComplete="email"
             autoCapitalize="none"
             placeholder="Verification code"
+            autoFocus
             className="focus:border-barcelona-primary-outline bg-barcelona-tertiary-background w-full touch-manipulation rounded-[12px] border-[1px] border-transparent p-[16px] text-start leading-[140%] outline-none"
             {...verifyForm.register('verificationCode', { required: true })}
           />
@@ -325,6 +304,7 @@ export default function EmailLoginForm() {
             autoComplete="email"
             autoCapitalize="none"
             placeholder="Verification code"
+            autoFocus
             className="focus:border-barcelona-primary-outline bg-barcelona-tertiary-background w-full touch-manipulation rounded-[12px] border-[1px] border-transparent p-[16px] text-start leading-[140%] outline-none"
             {...newUserForm.register('verificationCode', { required: true })}
           />
