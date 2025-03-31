@@ -22,7 +22,7 @@ api.interceptors.request.use(
 // --- Response Interceptor ---
 // Handle token expiration and automatic refresh
 let isRefreshing = false
-let failedQueue = [] // Queue for requests that failed due to 401 Unauthorized
+let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }[] = [] // Queue for requests that failed due to 401 Unauthorized
 
 const processQueue = (error: unknown, token = null) => {
   failedQueue.forEach((promise) => {
